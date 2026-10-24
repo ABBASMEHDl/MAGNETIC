@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magnetic Field Laboratory</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        body.dark {
+            background-color: #1a1a1a;
+            color: white;
+        }
+
+        body.light {
+            background-color: white;
+            color: black;
+        }
+
+        #container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            width: 280px;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 2px solid #404040;
+            background: inherit;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #404040;
+            border-radius: 8px;
+            background: inherit;
+        }
+
+        h2, h3 {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        .range-value {
+            text-align: right;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        body.dark button {
+            background-color: #2d2d2d;
+            color: white;
+        }
+
+        body.dark button:hover {
+            background-color: #3d3d2d;
+        }
+
+        body.light button {
+            background-color: #f0f0f0;
+            color: black;
+        }
+
+        body.light button:hover {
+            background-color: #e0e0e0;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #info-box {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        body.dark #info-box {
+            background-color: #2d2d2d;
+            color: white;
+        }
+
+        body.light #info-box {
+            background-color: wheat;
+            color: black;
+        }
+    </style>
+</head>
+<body class="dark">
+    <div id="container">
+        <div id="controls">
+            <h2>Magnetic Field Lab</h2>
+            
+            <div class="control-group">
+                <h3>Wire 1 Current</h3>
+                <div class="radio-group">
+                    <label class="radio-item">
+                        <input type="radio" name="wire1-dir" value="up" checked>
+                        <span>Up (+y)</span>
+                    </label>
+                    <label class="radio-item">
+                        <input type="radio" name="wire1-dir" value="down">
+                        <span>Down (-y)</span>
+                    </label>
+                </div>
+                <label>I₁ Magnitude (A)</label>
+                <input type="range" id="wire1-mag" min="0.1" max="10" step="0.1" value="5">
+                <div class="range-value" id="wire1-val">5.0 A</div>
+            </div>
+
+            <div class="control-group">
+                <h3>Wire 2 Current</h3>
+                <div class="radio-group">
+                    <label class="radio-item">
+                        <input type="radio" name="wire2-dir" value="up" checked>
+                        <span>Up (+y)</span>
+                    </label>
+                    <label class="radio-item">
+                        <input type="radio" name="wire2-dir" value="down">
+                        <span>Down (-y)</span>
+                    </label>
+                </div>
+                <label>I₂ Magnitude (A)</label>
+                <input type="range" id="wire2-mag" min="0.1" max="10" step="0.1" value="5">
+                <div class="range-value" id="wire2-val">5.0 A</div>
+            </div>
+
+            <div class="control-group">
+                <h3>Parameters</h3>
+                <label>Wire Separation (m)</label>
+                <input type="range" id="separation" min="0.2" max="3" step="0.1" value="1">
+                <div class="range-value" id="separation-val">1.0 m</div>
+            </div>
+
+            <div class="control-group">
+                <h3>Display</h3>
+                <button id="toggle-streamlines">Toggle Streamlines</button>
+                <button id="toggle-darkmode">Toggle Dark Mode</button>
+                <button id="toggle-rotation">Toggle Rotation</button>
+            </div>
+        </div>
+
+        <div id="canvas-container">
+            <div id="info-box">
+                Wire 1: 5.0A (↑)<br>
+                Wire 2: 5.0A (↑)<br>
+                Separation: 1.00m
+            </div>
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const MU_0 = 4 * Math.PI * 1e-7;
+
+        class MagneticFieldLab {
+            constructor() {
+                this.wireSeparation = 1.0;
+                this.current1 = 5.0;
+                this.current2 = 5.0;
+                this.showStreamlines = false;
+                this.darkMode = true;
+                this.autoRotate = false;
+                this.animationSpeed = 0.02;
+
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+
+                this.setupScene();
+                this.createGrid();
+                this.setupControls();
+                this.animate();
+            }
+
+            setupScene() {
+                const container = document.getElementById('canvas-container');
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+
+                this.renderer.setSize(width, height);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                
+                this.applyTheme();
+
+                this.camera.position.set(3, 3, 3);
+                this.camera.lookAt(0, 0, 0);
+
+                // Add OrbitControls for mouse interaction
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+                this.controls.minDistance = 2;
+                this.controls.maxDistance = 20;
+                this.controls.maxPolarAngle = Math.PI / 2;
+
+                this.scene.add(new THREE.AmbientLight(0x404040));
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                directionalLight.position.set(5, 5, 5);
+                this.scene.add(directionalLight);
+            }
+
+            applyTheme() {
+                if (this.darkMode) {
+                    this.scene.background = new THREE.Color(0x0d0d0d);
+                } else {
+                    this.scene.background = new THREE.Color(0xffffff);
+                }
+            }
+
+            createGrid() {
+                const gridHelper = new THREE.GridHelper(5, 10, 0x404040, 0x404040);
+                gridHelper.position.y = 0;
+                this.scene.add(gridHelper);
+
+                const axesHelper = new THREE.AxesHelper(2);
+                this.scene.add(axesHelper);
+            }
+
+            magneticField(point, wirePos, current) {
+                const rVec = new THREE.Vector3().subVectors(point, wirePos);
+                rVec.y = 0; // Only consider XZ plane distance
+
+                const r = rVec.length();
+                if (r < 0.1) {
+                    return new THREE.Vector3(0, 0, 0);
+                }
+
+                const B_mag = (MU_0 * Math.abs(current)) / (2 * Math.PI * r);
+                const wireDirection = new THREE.Vector3(0, 1, 0);
+
+                let B_direction;
+                if (current > 0) {
+                    B_direction = new THREE.Vector3().crossVectors(wireDirection, rVec);
+                } else {
+                    B_direction = new THREE.Vector3().crossVectors(wireDirection.negate(), rVec);
+                }
+
+                B_direction.normalize();
+                return B_direction.multiplyScalar(B_mag);
+            }
+
+            updateVisualization() {
+                this.scene.clear();
+                this.createGrid();
+
+                const wire1Pos = new THREE.Vector3(-this.wireSeparation / 2, 0, 0);
+                const wire2Pos = new THREE.Vector3(this.wireSeparation / 2, 0, 0);
+
+                // Draw wires
+                this.drawWire(wire1Pos, this.current1 > 0 ? 0xff0000 : 0x8b0000);
+                this.drawWire(wire2Pos, this.current2 > 0 ? 0x00ff00 : 0x006400);
+
+                // Draw current direction arrows
+                this.drawCurrentArrow(wire1Pos, this.current1);
+                this.drawCurrentArrow(wire2Pos, this.current2);
+
+                // Draw field lines or vectors
+                if (this.showStreamlines) {
+                    this.drawStreamlines(wire1Pos, wire2Pos);
+                } else {
+                    this.drawFieldVectors(wire1Pos, wire2Pos);
+                }
+
+                // Update info box
+                const infoBox = document.getElementById('info-box');
+                infoBox.innerHTML = `
+                    Wire 1: ${Math.abs(this.current1).toFixed(1)}A (${this.current1 > 0 ? '↑' : '↓'})<br>
+                    Wire 2: ${Math.abs(this.current2).toFixed(1)}A (${this.current2 > 0 ? '↑' : '↓'})<br>
+                    Separation: ${this.wireSeparation.toFixed(2)}m
+                `;
+            }
+
+            drawWire(position, color) {
+                const geometry = new THREE.CylinderGeometry(0.05, 0.05, 4, 8);
+                const material = new THREE.MeshBasicMaterial({ color: color });
+                const wire = new THREE.Mesh(geometry, material);
+                wire.position.copy(position);
+                this.scene.add(wire);
+            }
+
+            drawCurrentArrow(position, current) {
+                const arrowHelper = new THREE.ArrowHelper(
+                    new THREE.Vector3(0, current > 0 ? 1 : -1, 0),
+                    position,
+                    0.5,
+                    current > 0 ? 0xff0000 : 0x8b0000
+                );
+                this.scene.add(arrowHelper);
+            }
+
+            drawFieldVectors(wire1Pos, wire2Pos) {
+                const gridSize = 8;
+                const step = 0.5;
+                const points = [];
+
+                for (let i = -gridSize; i <= gridSize; i++) {
+                    for (let j = -gridSize; j <= gridSize; j++) {
+                        const point = new THREE.Vector3(i * step, 0, j * step);
+                        if (point.distanceTo(wire1Pos) < 0.3 || point.distanceTo(wire2Pos) < 0.3) continue;
+
+                        const B1 = this.magneticField(point, wire1Pos, this.current1);
+                        const B2 = this.magneticField(point, wire2Pos, this.current2);
+                        const B_total = B1.add(B2);
+
+                        const magnitude = B_total.length();
+                        if (magnitude > 0) {
+                            const arrowLength = 0.3;
+                            const arrow = new THREE.ArrowHelper(
+                                B_total.normalize(),
+                                point,
+                                arrowLength,
+                                0xff0000, // Changed to red color
+                                0.2,
+                                0.2
+                            );
+                            this.scene.add(arrow);
+                        }
+                    }
+                }
+            }
+
+            drawStreamlines(wire1Pos, wire2Pos) {
+                const nLines = 8;
+                const radius = 0.3;
+
+                const seeds = [wire1Pos, wire2Pos];
+                seeds.forEach(wirePos => {
+                    for (let i = 0; i < nLines; i++) {
+                        const angle = (i / nLines) * 2 * Math.PI;
+                        const startPoint = new THREE.Vector3(
+                            wirePos.x + radius * Math.cos(angle),
+                            0,
+                            wirePos.z + radius * Math.sin(angle)
+                        );
+
+                        const points = this.traceFieldLine(startPoint, wire1Pos, wire2Pos);
+                        if (points.length > 2) {
+                            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                            const material = new THREE.LineBasicMaterial({ color: 0xff0000, opacity: 0.7, linewidth: 2 });
+                            const line = new THREE.Line(geometry, material);
+                            this.scene.add(line);
+                        }
+                    }
+                });
+            }
+
+            traceFieldLine(startPoint, wire1Pos, wire2Pos) {
+                const points = [];
+                let currentPoint = startPoint.clone();
+                const stepSize = 0.05;
+
+                for (let step = 0; step < 50; step++) {
+                    const B1 = this.magneticField(currentPoint, wire1Pos, this.current1);
+                    const B2 = this.magneticField(currentPoint, wire2Pos, this.current2);
+                    const B_total = B1.add(B2);
+
+                    const magnitude = B_total.length();
+                    if (magnitude < 1e-10) break;
+
+                    points.push(currentPoint.clone());
+
+                    B_total.y = 0; // Keep in XZ plane
+                    B_total.normalize().multiplyScalar(stepSize);
+                    currentPoint.add(B_total);
+
+                    if (currentPoint.length() > 3) break;
+                }
+
+                return points;
+            }
+
+            setupControls() {
+                // Wire 1 controls
+                document.querySelectorAll('input[name="wire1-dir"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        const mag = Math.abs(this.current1);
+                        this.current1 = e.target.value === 'up' ? mag : -mag;
+                        this.updateVisualization();
+                    });
+                });
+
+                document.getElementById('wire1-mag').addEventListener('input', (e) => {
+                    const mag = parseFloat(e.target.value);
+                    const dir = this.current1 >= 0 ? 1 : -1;
+                    this.current1 = dir * mag;
+                    document.getElementById('wire1-val').textContent = `${mag.toFixed(1)} A`;
+                    this.updateVisualization();
+                });
+
+                // Wire 2 controls
+                document.querySelectorAll('input[name="wire2-dir"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        const mag = Math.abs(this.current2);
+                        this.current2 = e.target.value === 'up' ? mag : -mag;
+                        this.updateVisualization();
+                    });
+                });
+
+                document.getElementById('wire2-mag').addEventListener('input', (e) => {
+                    const mag = parseFloat(e.target.value);
+                    const dir = this.current2 >= 0 ? 1 : -1;
+                    this.current2 = dir * mag;
+                    document.getElementById('wire2-val').textContent = `${mag.toFixed(1)} A`;
+                    this.updateVisualization();
+                });
+
+                // Separation control
+                document.getElementById('separation').addEventListener('input', (e) => {
+                    this.wireSeparation = parseFloat(e.target.value);
+                    document.getElementById('separation-val').textContent = `${this.wireSeparation.toFixed(2)} m`;
+                    this.updateVisualization();
+                });
+
+                // Buttons
+                document.getElementById('toggle-streamlines').addEventListener('click', () => {
+                    this.showStreamlines = !this.showStreamlines;
+                    this.updateVisualization();
+                });
+
+                document.getElementById('toggle-darkmode').addEventListener('click', () => {
+                    this.darkMode = !this.darkMode;
+                    this.applyTheme();
+                    document.body.className = this.darkMode ? 'dark' : 'light';
+                });
+
+                document.getElementById('toggle-rotation').addEventListener('click', () => {
+                    this.autoRotate = !this.autoRotate;
+                    console.log(`Auto-rotation: ${this.autoRotate ? 'ON' : 'OFF'}`);
+                });
+
+                // Window resize
+                window.addEventListener('resize', () => {
+                    const container = document.getElementById('canvas-container');
+                    const width = container.clientWidth;
+                    const height = container.clientHeight;
+
+                    this.camera.aspect = width / height;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(width, height);
+                });
+
+                // Initial visualization
+                this.updateVisualization();
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                if (this.autoRotate) {
+                    this.camera.position.x = this.camera.position.x * Math.cos(this.animationSpeed) - this.camera.position.z * Math.sin(this.animationSpeed);
+                    this.camera.position.z = this.camera.position.x * Math.sin(this.animationSpeed) + this.camera.position.z * Math.cos(this.animationSpeed);
+                    this.camera.lookAt(0, 0, 0);
+                }
+
+                // Update controls (needed for damping and auto-rotation)
+                this.controls.update();
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize the lab when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            new MagneticFieldLab();
+        });
+    </script>
+</body>
+</html>
